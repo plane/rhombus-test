@@ -1,7 +1,7 @@
 #lang rhombus
 
 import:
-  = "threading.rhm"
+  = "operators.rhm"
 
 fun adder(x):
   fun (y):
