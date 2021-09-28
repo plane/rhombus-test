@@ -1,0 +1,27 @@
+#lang rhombus
+
+import:
+  racket/base
+
+export:
+  |> <| >> <<
+
+operator (x |> f):
+  ~associativity: ~left
+  ~stronger_than: = == != < >
+  f(x)
+  
+operator (f <| x):
+  ~associativity: ~right
+  ~stronger_than: = == != < >
+  f(x)
+
+operator (f >> g):
+  ~associativity: ~left
+  ~stronger_than: = == != < >
+  base.compose(g,f)
+
+operator (f << g):
+  ~associativity: ~right
+  ~stronger_than: = == != < >
+  base.compose(f,g)
