@@ -74,9 +74,8 @@ fun sdl_error_if(condition):
 expr.rule '(sdl_check: $body ...):
   '(sdl_error_if($body ...))
 
-fun sdl_bool(bool):
-  if bool | SDL_TRUE
-          | SDL_FALSE
+fun | sdl_bool(#false) : SDL_FALSE
+    | sdl_bool(_)      : SDL_TRUE
 
 
 // -----------------------------------------------
@@ -110,34 +109,46 @@ fun get_window_size(window):
   [width, height]
 
 
-fun get_window():
-  val window_title: "Hello, world!"
-  val x_pos: SDL_WINDOWPOS_UNDEFINED
-  val y_pos: SDL_WINDOWPOS_UNDEFINED
-  val x_res: 640
-  val y_res: 480
-  val vsync: #true
-
-  val window:
-    SDL_CreateWindow(
-      window_title, x_pos, y_pos, x_res, y_res, sdl_window_flags())
-  sdl_check: !window
+fun init_opengl(window):
   val context: SDL_GL_CreateContext(window)
   sdl_check: !context
-  sdl_check: SDL_GL_SetSwapInterval(sdl_bool(vsync)) < 0
   glDisable(GL_DEPTH_TEST)
   glDisable(GL_CULL_FACE)
   val [width, height]:
     get_window_size(window)
   glViewport(0, 0, width, height)
   glClearColor(1.0, 0.5, 1.0, 1.0)
+
+
+fun init_vsync():
+  val vsync    : #true
+  val adaptive : #true
+  sdl_check: SDL_GL_SetSwapInterval(
+    cond
+      | adaptive : -1
+      | vsync    :  0
+      | ~else    :  1) < 0
+
+
+fun get_window():
+  val window_title: "Hello, world!"
+  val x_pos: SDL_WINDOWPOS_UNDEFINED
+  val y_pos: SDL_WINDOWPOS_UNDEFINED
+  val x_res: 640
+  val y_res: 480
+
+  val window:
+    SDL_CreateWindow(
+      window_title, x_pos, y_pos, x_res, y_res, sdl_window_flags())
+  sdl_check: !window
+  init_opengl(window)
+  init_vsync()
   window
 
 
 fun sysinfo():
-  fun fmt_bool(b):
-    if b == 1 | "Yes"
-              | "No"
+  fun | fmt_bool(1): "Yes"
+      | fmt_bool(_): "No"
   say("Platform:         " & SDL_GetPlatform())
   say("CPU count:        " & SDL_GetCPUCount())
   say("System RAM:       " & SDL_GetSystemRAM() & " MiB")
