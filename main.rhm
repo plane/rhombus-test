@@ -66,11 +66,20 @@ fun sdl_window_flags():
 // -----------------------------------------------
 
 
+expr.rule '(when $cond: $then ...):
+  '(if $cond
+      | $then ...
+      | base.void())
+
+
+fun sdl_error_if(cond):
+  when cond:
+    base.error("SDL Error: " & SDL_GetError())
+
+
 expr.rule '(sdl_check: $body ...):
   '(sdl_error_if($body ...))
 
-fun | sdl_error_if(#false) : base.void()
-    | sdl_error_if(_)      : base.error("SDL Error: " & SDL_GetError())
 
 fun | sdl_bool(#false) : SDL_FALSE
     | sdl_bool(_)      : SDL_TRUE
