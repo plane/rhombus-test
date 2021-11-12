@@ -100,6 +100,7 @@ fun new_ptr(type):
     type)
 
 
+// If _int_star and _intptr ever differ, I'll be in big trouble
 fun get_window_size(window):
   val width_ptr:  new_ptr(_int_star)
   val height_ptr: new_ptr(_int_star)
