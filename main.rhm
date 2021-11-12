@@ -9,12 +9,15 @@ import:
   rhombus/macro: no_prefix
   "threading.rhm": no_prefix
   opengl: no_prefix
-  sdl2: no_prefix
-  ffi/unsafe
+  "sdl2.rkt": no_prefix
+  "ffi.rkt"
+  "bitwise.rkt"
 
 
 // -----------------------------------------------
 
+operator (lhs ∨ rhs):
+  bitwise.or(lhs, rhs)
 
 expr.rule '(▷ $name):
   '(symbol($name))
@@ -23,7 +26,6 @@ expr.rule '($cond ◈ $name):
   '(if $cond
       | [symbol($name)]
       | [])
-
 
 fun sdl_init_flags():
   val audio      : #true
@@ -88,6 +90,20 @@ fun init_sdl():
   sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DOUBLEBUFFER, 1) < 0
   sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DEPTH_SIZE, 24) < 0
 
+fun new_ptr(type):
+  ffi.cast(
+    ffi.malloc(▷ atomic, ffi.ctype_sizeof(type)),
+    ffi._pointer,
+    type)
+
+fun get_window_size(window):
+  val width_ptr:  new_ptr(_int_star)
+  val height_ptr: new_ptr(_int_star)
+  SDL_GetWindowSize(window, width_ptr, height_ptr)
+  val width:  ffi.ptr_ref(width_ptr, ffi._intptr)
+  val height: ffi.ptr_ref(width_ptr, ffi._intptr)
+  [width, height]
+
 fun get_window():
   val window_title: "Hello, world!"
   val x_pos: SDL_WINDOWPOS_UNDEFINED
@@ -96,19 +112,19 @@ fun get_window():
   val y_res: 480
   val vsync: #true
 
-  init_sdl()
-  val window: SDL_CreateWindow(window_title,
-                               x_pos,
-                               y_pos,
-                               x_res,
-                               y_res,
-                               sdl_window_flags())
+  val window:
+    SDL_CreateWindow(
+      window_title, x_pos, y_pos, x_res, y_res, sdl_window_flags())
   sdl_check: !window
   val context: SDL_GL_CreateContext(window)
   sdl_check: !context
   sdl_check: SDL_GL_SetSwapInterval(sdl_bool(vsync)) < 0
   glDisable(GL_DEPTH_TEST)
   glDisable(GL_CULL_FACE)
+  val [width, height]:
+    get_window_size(window)
+  glViewport(0, 0, width, height)
+  glClearColor(1.0, 0.5, 1.0, 1.0)
   window
 
 fun sysinfo():
@@ -132,6 +148,8 @@ fun update(window):
   val surface: SDL_GetWindowSurface(window)
   sdl_check: !surface
   sdl_check: SDL_UpdateWindowSurface(window) < 0
+  glClear(GL_COLOR_BUFFER_BIT ∨ GL_DEPTH_BUFFER_BIT)
+  SDL_GL_SwapWindow(window)
   base.sleep(1)
 
 fun bye():
