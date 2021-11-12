@@ -66,13 +66,11 @@ fun sdl_window_flags():
 // -----------------------------------------------
 
 
-fun sdl_error_if(condition):
-  if condition
-    | base.error("SDL Error: " & SDL_GetError())
-    | base.void()
-
 expr.rule '(sdl_check: $body ...):
   '(sdl_error_if($body ...))
+
+fun | sdl_error_if(#false) : base.void()
+    | sdl_error_if(_)      : base.error("SDL Error: " & SDL_GetError())
 
 fun | sdl_bool(#false) : SDL_FALSE
     | sdl_bool(_)      : SDL_TRUE
@@ -101,33 +99,32 @@ fun new_ptr(type):
 
 // If _int_star and _intptr ever differ, I'll be in big trouble
 fun get_window_size(window):
-  val width_ptr:  new_ptr(_int_star)
-  val height_ptr: new_ptr(_int_star)
+  val width_ptr  : new_ptr(_int_star)
+  val height_ptr : new_ptr(_int_star)
   SDL_GetWindowSize(window, width_ptr, height_ptr)
-  val width:  ffi.ptr_ref(width_ptr,  ffi._intptr)
-  val height: ffi.ptr_ref(height_ptr, ffi._intptr)
+
+  val width  : ffi.ptr_ref(width_ptr,  ffi._intptr)
+  val height : ffi.ptr_ref(height_ptr, ffi._intptr)
   [width, height]
 
 
 fun init_opengl(window):
   val context: SDL_GL_CreateContext(window)
   sdl_check: !context
-  glDisable(GL_DEPTH_TEST)
-  glDisable(GL_CULL_FACE)
-  val [width, height]:
-    get_window_size(window)
+  val [width, height]: get_window_size(window)
   glViewport(0, 0, width, height)
   glClearColor(1.0, 0.5, 1.0, 1.0)
+  glDisable(GL_DEPTH_TEST)
+  glDisable(GL_CULL_FACE)
 
 
 fun init_vsync():
   val vsync    : #true
   val adaptive : #true
-  sdl_check: SDL_GL_SetSwapInterval(
-    cond
-      | adaptive : -1
-      | vsync    :  0
-      | ~else    :  1) < 0
+  sdl_check: 
+    SDL_GL_SetSwapInterval(cond | adaptive : -1
+                                | vsync    :  0
+                                | ~else    :  1) < 0
 
 
 fun get_window():
