@@ -25,9 +25,8 @@ expr.rule '(▷ $name):
   '(symbol($name))
   
 expr.rule '($cond ◈ $name):
-  '(if $cond
-      | [symbol($name)]
-      | [])
+  '(if $cond | [symbol($name)]
+             | [])
 
 fun sdl_init_flags():
   val audio      : #true
@@ -67,9 +66,8 @@ fun sdl_window_flags():
 
 
 expr.rule '(when $cond: $then ...):
-  '(if $cond
-      | $then ...
-      | base.void())
+  '(if $cond | $then ...
+             | base.void())
 
 
 fun sdl_error_if(cond):
