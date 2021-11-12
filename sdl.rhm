@@ -1,9 +1,14 @@
 #lang rhombus
 
 import:
-  racket/base
+  racket/base:
+    rename:
+      displayln ~to say
+    expose:
+      say
   rhombus/macro: no_prefix
   "threading.rhm": no_prefix
+  opengl: no_prefix
   sdl2: no_prefix
   ffi/unsafe
 
@@ -11,10 +16,14 @@ import:
 // -----------------------------------------------
 
 
+expr.rule '(▷ $name):
+  '(symbol($name))
+  
 expr.rule '($cond ◈ $name):
   '(if $cond
       | [symbol($name)]
       | [])
+
 
 fun sdl_init_flags():
   val audio      : #true
@@ -61,6 +70,10 @@ fun sdl_error_if(condition):
 expr.rule '(sdl_check: $body ...):
   '(sdl_error_if($body ...))
 
+fun sdl_bool(bool):
+  if bool | SDL_TRUE
+          | SDL_FALSE
+
 
 // -----------------------------------------------
 
@@ -69,8 +82,11 @@ fun init_sdl():
   SDL_SetMainReady()
   sdl_check: SDL_Init(sdl_init_flags()) < 0
   sdl_check: SDL_GL_LoadLibrary(#false) < 0
-  SDL_GL_SetSwapInterval(SDL_TRUE);
-
+  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_ACCELERATED_VISUAL, 1) < 0
+  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0
+  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_CONTEXT_MINOR_VERSION, 6) < 0
+  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DOUBLEBUFFER, 1) < 0
+  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DEPTH_SIZE, 24) < 0
 
 fun get_window():
   val window_title: "Hello, world!"
@@ -78,6 +94,7 @@ fun get_window():
   val y_pos: SDL_WINDOWPOS_UNDEFINED
   val x_res: 640
   val y_res: 480
+  val vsync: #true
 
   init_sdl()
   val window: SDL_CreateWindow(window_title,
@@ -87,20 +104,29 @@ fun get_window():
                                y_res,
                                sdl_window_flags())
   sdl_check: !window
+  val context: SDL_GL_CreateContext(window)
+  sdl_check: !context
+  sdl_check: SDL_GL_SetSwapInterval(sdl_bool(vsync)) < 0
+  glDisable(GL_DEPTH_TEST)
+  glDisable(GL_CULL_FACE)
   window
 
-fun sdl_sysinfo():
+fun sysinfo():
   fun fmt_bool(b):
     if b == 1 | "Yes"
               | "No"
-  base.displayln("Platform:   " & SDL_GetPlatform())
-  base.displayln("CPU count:  " & SDL_GetCPUCount())
-  base.displayln("System RAM: " & SDL_GetSystemRAM() & " MiB")
-  base.displayln("Has SSE:    " & SDL_HasSSE()   |> fmt_bool)
-  base.displayln("Has SSE2:   " & SDL_HasSSE2()  |> fmt_bool)
-  base.displayln("Has SSE3:   " & SDL_HasSSE3()  |> fmt_bool)
-  base.displayln("Has SSE4.1: " & SDL_HasSSE41() |> fmt_bool)
-  base.displayln("Has SSE4.2: " & SDL_HasSSE42() |> fmt_bool)
+  say("Platform:         " & SDL_GetPlatform())
+  say("CPU count:        " & SDL_GetCPUCount())
+  say("System RAM:       " & SDL_GetSystemRAM() & " MiB")
+  say("Has SSE:          " & SDL_HasSSE()   |> fmt_bool)
+  say("Has SSE2:         " & SDL_HasSSE2()  |> fmt_bool)
+  say("Has SSE3:         " & SDL_HasSSE3()  |> fmt_bool)
+  say("Has SSE4.1:       " & SDL_HasSSE41() |> fmt_bool)
+  say("Has SSE4.2:       " & SDL_HasSSE42() |> fmt_bool)
+  say("OpenGL vendor:    " & glGetString(GL_VENDOR))
+  say("OpenGL renderer:  " & glGetString(GL_RENDERER))
+  say("OpenGL version:   " & glGetString(GL_VERSION))
+  say("OpenGLSL version: " & glGetString(GL_SHADING_LANGUAGE_VERSION))
 
 fun update(window):
   val surface: SDL_GetWindowSurface(window)
@@ -110,7 +136,7 @@ fun update(window):
 
 fun bye():
   SDL_Quit()
-  base.displayln("Bye, bye!")
+  say("Bye, bye!")
 
 
 // -----------------------------------------------
@@ -118,7 +144,7 @@ fun bye():
 
 fun main():
   val window: get_window()
-  sdl_sysinfo()
+  sysinfo()
   update(window)
   bye()
 
