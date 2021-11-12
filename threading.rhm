@@ -8,20 +8,20 @@ export:
 
 operator (x |> f):
   ~associativity: ~left
-  ~stronger_than: = == != < >
+  ~stronger_than: = == != < > &
   f(x)
   
 operator (f <| x):
   ~associativity: ~right
-  ~stronger_than: = == != < >
+  ~stronger_than: = == != < > &
   f(x)
 
 operator (f >> g):
   ~associativity: ~left
-  ~stronger_than: = == != < >
+  ~stronger_than: = == != < > &
   base.compose(g,f)
 
 operator (f << g):
   ~associativity: ~right
-  ~stronger_than: = == != < >
+  ~stronger_than: = == != < > &
   base.compose(f,g)
