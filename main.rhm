@@ -7,11 +7,13 @@ import:
     expose:
       say
   rhombus/macro: no_prefix
-  "threading.rhm": no_prefix
   opengl: no_prefix
-  "sdl2.rkt": no_prefix
-  "ffi.rkt"
-  "bitwise.rkt"
+
+import:
+  "private/threading.rhm": no_prefix
+  "private/sdl2.rkt": no_prefix
+  "private/ffi.rkt"
+  "private/bitwise.rkt"
 
 
 // -----------------------------------------------
