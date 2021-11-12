@@ -104,13 +104,9 @@ fun new_ptr(type):
 fun get_window_size(window):
   val width_ptr:  new_ptr(_int_star)
   val height_ptr: new_ptr(_int_star)
-
-  SDL_GetWindowSize(
-    window, width_ptr, height_ptr)
-
+  SDL_GetWindowSize(window, width_ptr, height_ptr)
   val width:  ffi.ptr_ref(width_ptr,  ffi._intptr)
   val height: ffi.ptr_ref(height_ptr, ffi._intptr)
-
   [width, height]
 
 
