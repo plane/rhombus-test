@@ -97,14 +97,13 @@ fun new_ptr(type):
     type)
 
 
-// If _int_star and _intptr ever differ, I'll be in big trouble
 fun get_window_size(window):
-  val width_ptr  : new_ptr(_int_star)
-  val height_ptr : new_ptr(_int_star)
-  SDL_GetWindowSize(window, width_ptr, height_ptr)
-  val width  : ffi.ptr_ref(width_ptr, ffi._int)
-  val height : ffi.ptr_ref(height_ptr, ffi._int)
-  [width, height]
+  fun new(): new_ptr(_int_star)
+  fun ref(ptr): ffi.ptr_ref(ptr, ffi._int)
+
+  val [width, height] : [new(), new()]
+  SDL_GetWindowSize(window, width, height)
+  [ref(width), ref(height)]
 
 
 fun init_opengl(window):
