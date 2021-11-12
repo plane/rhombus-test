@@ -92,19 +92,26 @@ fun init_sdl():
   sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DOUBLEBUFFER, 1) < 0
   sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DEPTH_SIZE, 24) < 0
 
+
 fun new_ptr(type):
   ffi.cast(
     ffi.malloc(▷ atomic, ffi.ctype_sizeof(type)),
     ffi._pointer,
     type)
 
+
 fun get_window_size(window):
   val width_ptr:  new_ptr(_int_star)
   val height_ptr: new_ptr(_int_star)
-  SDL_GetWindowSize(window, width_ptr, height_ptr)
-  val width:  ffi.ptr_ref(width_ptr, ffi._intptr)
-  val height: ffi.ptr_ref(width_ptr, ffi._intptr)
+
+  SDL_GetWindowSize(
+    window, width_ptr, height_ptr)
+
+  val width:  ffi.ptr_ref(width_ptr,  ffi._intptr)
+  val height: ffi.ptr_ref(height_ptr, ffi._intptr)
+
   [width, height]
+
 
 fun get_window():
   val window_title: "Hello, world!"
@@ -129,6 +136,7 @@ fun get_window():
   glClearColor(1.0, 0.5, 1.0, 1.0)
   window
 
+
 fun sysinfo():
   fun fmt_bool(b):
     if b == 1 | "Yes"
@@ -146,6 +154,7 @@ fun sysinfo():
   say("OpenGL version:   " & glGetString(GL_VERSION))
   say("OpenGLSL version: " & glGetString(GL_SHADING_LANGUAGE_VERSION))
 
+
 fun update(window):
   val surface: SDL_GetWindowSurface(window)
   sdl_check: !surface
@@ -153,6 +162,7 @@ fun update(window):
   glClear(GL_COLOR_BUFFER_BIT ∨ GL_DEPTH_BUFFER_BIT)
   SDL_GL_SwapWindow(window)
   base.sleep(1)
+
 
 fun bye():
   SDL_Quit()
