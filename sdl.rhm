@@ -1,0 +1,125 @@
+#lang rhombus
+
+import:
+  racket/base
+  rhombus/macro: no_prefix
+  "threading.rhm": no_prefix
+  sdl2: no_prefix
+  ffi/unsafe
+
+
+// -----------------------------------------------
+
+
+expr.rule '($cond ◈ $name):
+  '(if $cond
+      | [symbol($name)]
+      | [])
+
+fun sdl_init_flags():
+  val audio      : #true
+  val controller : #true
+  val events     : #true
+  val timer      : #true
+  val video      : #true
+
+  base.append(
+    audio      ◈ SDL_INIT_AUDIO,
+    controller ◈ SDL_INIT_GAMECONTROLLER,
+    events     ◈ SDL_INIT_EVENTS,
+    timer      ◈ SDL_INIT_TIMER,
+    video      ◈ SDL_INIT_VIDEO,
+  )
+
+
+fun sdl_window_flags():
+  val borderless_fullscreen : #true
+  val fullscreen            : #false
+  val grab_input            : #true
+  val no_window_decorations : #false
+  val maximized             : #false
+  val opengl                : #true
+
+  base.append(
+    borderless_fullscreen ◈ SDL_WINDOW_FULLSCREEN_DESKTOP,
+    fullscreen            ◈ SDL_WINDOW_FULLSCREEN,
+    grab_input            ◈ SDL_WINDOW_INPUT_GRABBED,
+    maximized             ◈ SDL_WINDOW_MAXIMIZED,
+    no_window_decorations ◈ SDL_WINDOW_BORDERLESS,
+    opengl                ◈ SDL_WINDOW_OPENGL,
+  )
+
+
+// -----------------------------------------------
+
+
+fun sdl_error_if(condition):
+  if condition
+    | base.error("SDL Error: " & SDL_GetError())
+    | base.void()
+
+expr.rule '(sdl_check: $body ...):
+  '(sdl_error_if($body ...))
+
+
+// -----------------------------------------------
+
+
+fun init_sdl():
+  SDL_SetMainReady()
+  sdl_check: SDL_Init(sdl_init_flags()) < 0
+  sdl_check: SDL_GL_LoadLibrary(#false) < 0
+  SDL_GL_SetSwapInterval(SDL_TRUE);
+
+
+fun get_window():
+  val window_title: "Hello, world!"
+  val x_pos: SDL_WINDOWPOS_UNDEFINED
+  val y_pos: SDL_WINDOWPOS_UNDEFINED
+  val x_res: 640
+  val y_res: 480
+
+  init_sdl()
+  val window: SDL_CreateWindow(window_title,
+                               x_pos,
+                               y_pos,
+                               x_res,
+                               y_res,
+                               sdl_window_flags())
+  sdl_check: !window
+  window
+
+fun sdl_sysinfo():
+  fun fmt_bool(b):
+    if b == 1 | "Yes"
+              | "No"
+  base.displayln("Platform:   " & SDL_GetPlatform())
+  base.displayln("CPU count:  " & SDL_GetCPUCount())
+  base.displayln("System RAM: " & SDL_GetSystemRAM() & " MiB")
+  base.displayln("Has SSE:    " & SDL_HasSSE()   |> fmt_bool)
+  base.displayln("Has SSE2:   " & SDL_HasSSE2()  |> fmt_bool)
+  base.displayln("Has SSE3:   " & SDL_HasSSE3()  |> fmt_bool)
+  base.displayln("Has SSE4.1: " & SDL_HasSSE41() |> fmt_bool)
+  base.displayln("Has SSE4.2: " & SDL_HasSSE42() |> fmt_bool)
+
+fun update(window):
+  val surface: SDL_GetWindowSurface(window)
+  sdl_check: !surface
+  sdl_check: SDL_UpdateWindowSurface(window) < 0
+  base.sleep(1)
+
+fun bye():
+  SDL_Quit()
+  base.displayln("Bye, bye!")
+
+
+// -----------------------------------------------
+
+
+fun main():
+  val window: get_window()
+  sdl_sysinfo()
+  update(window)
+  bye()
+
+main()
