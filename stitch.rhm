@@ -3,15 +3,13 @@
 import:
   racket/base:
     rename:
-      #{make-vector} ~to make_vector
+      #{bytes->string/utf-8} ~to bytes_to_string
       #{for-each} ~to for_each
-      #{string->path} ~to string_to_path
+      #{inexact->exact} ~to inexact_to_exact
+      #{make-vector} ~to make_vector
       #{path->string} ~to path_to_string
       #{string-downcase} ~to string_downcase
-      #{inexact->exact} ~to inexact_to_exact
-      #{exact->inexact} ~to exact_to_inexact
       #{with-output-to-file} ~to with_output_to_file
-      #{bytes->string/utf-8} ~to bytes_to_string
   racket/control
   racket/file:
     rename:
@@ -21,9 +19,6 @@ import:
     rename:
       #{file-name-from-path} ~to to_filename
       #{path-get-extension} ~to get_extension
-  racket/string:
-    rename:
-      #{string-suffix?} ~to check_suffix
 
 
 import:
@@ -193,9 +188,7 @@ fun find_image_files(pathname):
           | _      : #false
       | #false
         
-  file.find_files(
-    is_image_file,
-    base.string_to_path(pathname))
+  file.find_files(is_image_file, pathname)
 
 
 fun max_side(img):
@@ -330,13 +323,11 @@ fun make_atlas(imgs, granularity, size_mult = 1):
 fun write_atlas_index(atlas_index -: Array,
                       filename -: String):
   fun fmt_entry(entry):
-    base.printf("~a\n"
-                  & "~a\n"
-                  & "~a\n"
-                  & "\n",
-                entry.x,
-                entry.y,
-                entry.filename)
+    base.for_each(
+      base.displayln, [entry.x,
+                       entry.y,
+                       entry.filename,
+                       ""])
 
   base.with_output_to_file(
     filename,
