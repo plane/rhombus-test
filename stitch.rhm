@@ -3,7 +3,6 @@
 import:
   racket/base:
     rename:
-      error ~to die
       #{make-vector} ~to make_vector
       #{for-each} ~to for_each
       #{string->path} ~to string_to_path
@@ -11,13 +10,17 @@ import:
       #{string-downcase} ~to string_downcase
       #{inexact->exact} ~to inexact_to_exact
       #{exact->inexact} ~to exact_to_inexact
-    expose:
-      die
+      #{with-output-to-file} ~to with_output_to_file
+      #{bytes->string/utf-8} ~to bytes_to_string
   racket/control
   racket/file:
     rename:
       #{find-files} ~to find_files
   racket/list
+  racket/path:
+    rename:
+      #{file-name-from-path} ~to to_filename
+      #{path-get-extension} ~to get_extension
   racket/string:
     rename:
       #{string-suffix?} ~to check_suffix
@@ -38,6 +41,10 @@ import:
 
 operator (lhs ≠ rhs):
   ! (lhs === rhs)
+
+
+expr.rule '(▷ $name):
+  '(symbol($name))
 
 
 expr.rule '($cond ◈ $name):
@@ -72,10 +79,10 @@ expr.rule '(when $cond ... : $then ...; ...):
 
 fun sdl_error_if(cond):
   when cond:
-    die("SDL2 error: " & sdl.GetError())
+    base.error("SDL2 error: " & sdl.GetError())
 fun img_error_if(cond):
   when cond:
-    die("SDL2_image error: " & img.GetError())
+    base.error("SDL2_image error: " & img.GetError())
 
 
 expr.rule '(sdl_check: $body ...):
@@ -145,11 +152,17 @@ fun pixel_size_to_grid_size(x, granularity):
 // -----------------------------------------------
 
 
-class Image(surface, filename, w, h, gridw, gridh)
+class Image(surface,
+            full_path,
+            filename,
+            w,          // pixel width, height
+            h,
+            gridw,      // grid width, height
+            gridh)
 
 
-fun make_Image(filename, granularity):
-  val src: img.Load(filename)
+fun make_Image(filepath, granularity):
+  val src: img.Load(filepath)
   img_check: !src
 
   val pixels: sdl.Surface_pixels(src)
@@ -159,28 +172,30 @@ fun make_Image(filename, granularity):
   val gridw: pixel_size_to_grid_size(width, granularity)
   val gridh: pixel_size_to_grid_size(height, granularity)
 
-  Image(src, filename, width, height, gridw, gridh)
+  val filename:
+    path.to_filename(filepath)
+      |> base.path_to_string
+
+  Image(src, filepath, filename, width, height, gridw, gridh)
 
 
 fun find_image_files(pathname):
-  fun has_suffix(path,  suffix):
-    base.path_to_string(path)
-      |> base.string_downcase(_)
-      |> string.check_suffix(_, suffix)
+  fun is_image_file(filename):
+    val bytes_ext:
+      path.get_extension(filename)
 
-  fun is_image(path):
-    base.or(
-      has_suffix(path, ".png"),   // only use PNG for now
-   // has_suffix(path, ".tif"),
-   // has_suffix(path, ".webp"),
-    )
-
-  val path: base.string_to_path(pathname)
-  val files: file.find_files(is_image, path)
-  base.map(base.path_to_string, files)
-
-
-// -----------------------------------------------
+    if bytes_ext
+      | val ext_lowercase: bytes_ext
+                             |> base.bytes_to_string
+                             |> base.string_downcase
+        match ext_lowercase
+          | ".png" : #true       // add other filetypes here
+          | _      : #false
+      | #false
+        
+  file.find_files(
+    is_image_file,
+    base.string_to_path(pathname))
 
 
 fun max_side(img):
@@ -228,7 +243,7 @@ fun make_grid(width  -: Integer,
                  x >= width,
                  y < 0,
                  y >= height):
-      die("index out of range: x=" & x & ", y=" & y)
+      base.error("index out of range: x=" & x & ", y=" & y)
 
   fun _get(x -: Integer,
            y -: Integer):
@@ -272,10 +287,16 @@ fun set_filled(grid, x0, y0, x1, y1):
   base.for_each(set_row, list.range(y0, y1))
 
 
+// -----------------------------------------------
+
+
+class ImagePos(filename, x, y)
+
+
 fun make_atlas(imgs, granularity, size_mult = 1):
   val atlas_size   : get_atlas_size(imgs) * size_mult
   val grid         : make_atlas_grid(atlas_size, granularity)
-  val atlas        : make_surface(atlas_size, atlas_size)
+  val atlas_image  : make_surface(atlas_size, atlas_size)
 
   fun insert_img(img):
     val max_gridx : grid.width  - img.gridw + 1
@@ -283,33 +304,65 @@ fun make_atlas(imgs, granularity, size_mult = 1):
     fun loop(x = 0, y = 0):
       cond
         | y == max_gridy:
-            control.abort(                                    // we ran out of space, so let's try again
-              make_atlas(imgs, granularity, size_mult * 2))   // with twice as much space
+            control.abort(                                      // we ran out of space, so let's try
+              make_atlas(imgs, granularity, size_mult * 2))     // again with twice as much space
         | x == max_gridx:
             loop(0, y + 1)
         | ~else:
-            val x1: x + img.gridw
-            val y1: y + img.gridh
-            val px: x * granularity
+            val x1: x + img.gridw                               // grid coordinates
+            val y1: y + img.gridh 
+            val px: x * granularity                             // pixel coordinates
             val py: y * granularity
             if check_empty(grid, x, y, x1, y1)
-              | copy_surface(img.surface, atlas, px, py)
-                set_filled(grid, x, y, x1, y1)
+              | copy_surface(img.surface, atlas_image, px, py)  // copy the image to our atlas
+                set_filled(grid, x, y, x1, y1)                  // keep track of it in our grid
+                ImagePos(img.filename, px, py)                  // and return its pixel location
               | loop(x + 1, y)
     loop()
-  base.map(insert_img, imgs)
-  atlas
+
+  val atlas_index:
+    base.map(insert_img, imgs)
+
+  values(atlas_index,
+         atlas_image)
 
 
-fun stitch_images(src_pathname  = "in",
-                  dest_filename = "output.png",
-                  granularity   = 16):
+fun write_atlas_index(atlas_index -: Array,
+                      filename -: String):
+  fun fmt_entry(entry):
+    base.printf("~a\n"
+                  & "~a\n"
+                  & "~a\n"
+                  & "\n",
+                entry.x,
+                entry.y,
+                entry.filename)
+
+  base.with_output_to_file(
+    filename,
+    fun():
+      base.map(fmt_entry, atlas_index),
+    ~exists: ▷ replace)
+
+
+fun stitch_images(src_image_folder      = "in",
+                  output_image_filename = "atlas.png",
+                  output_index_filename = "atlas.txt",
+                  granularity           = 16):
   val imgs: 
-    load_sorted_imgs(src_pathname, granularity)
-  val atlas:
+    load_sorted_imgs(src_image_folder, granularity)
+    
+  val (atlas_index,
+       atlas_image):
     control.prompt(
       make_atlas(imgs, granularity))
-  img.SavePNG(atlas, dest_filename)
+
+  write_atlas_index(atlas_index,
+                    output_index_filename)
+  
+  img_check:
+    img.SavePNG(atlas_image,
+                output_image_filename) < 0
 
 
 fun main():
