@@ -4,29 +4,50 @@ import:
   racket/base:
     rename:
       displayln ~to say
+      error ~to die
+      #{make-hash} ~to make_hash
+      #{for-each} ~to for_each
+      #{string-length} ~to string_length
+      #{bytes->string/utf-8} ~to bytes_to_string
     expose:
+      die
       say
+  racket/file:
+    rename:
+      #{file->string} ~to file_to_string
+  racket/list
   rhombus/macro: no_prefix
   opengl: no_prefix
 
+
 import:
-  "private/threading.rhm": no_prefix
-  "private/sdl2.rkt": no_prefix
-  "private/ffi.rkt"
+  "private/sdl/sdl.rkt"
+  "private/sdl/img.rkt"
+  "private/sdl/ttf.rkt"
   "private/bitwise.rkt"
+  "private/ffi.rkt"
+  "private/threading.rhm": no_prefix
 
 
 // -----------------------------------------------
 
+
 operator (lhs ∨ rhs):
   bitwise.or(lhs, rhs)
 
+
+operator (lhs ≠ rhs):
+  ! (lhs === rhs)
+
+
 expr.rule '(▷ $name):
   '(symbol($name))
-  
+
+
 expr.rule '($cond ◈ $name):
   '(if $cond | [symbol($name)]
              | [])
+
 
 fun sdl_init_flags():
   val audio      : #true
@@ -44,18 +65,30 @@ fun sdl_init_flags():
   )
 
 
+fun img_init_flags():
+  val jpg        : #false
+  val png        : #true
+  val tif        : #false
+  val webp       : #false
+
+  base.append(
+    jpg  ◈ IMG_INIT_JPG,
+    png  ◈ IMG_INIT_PNG,
+    tif  ◈ IMG_INIT_TIF,
+    webp ◈ IMG_INIT_WEBP,
+  )
+
+
 fun sdl_window_flags():
   val borderless_fullscreen : #true
   val fullscreen            : #false
-  val grab_input            : #true
-  val no_window_decorations : #false
   val maximized             : #false
+  val no_window_decorations : #false
   val opengl                : #true
 
   base.append(
     borderless_fullscreen ◈ SDL_WINDOW_FULLSCREEN_DESKTOP,
     fullscreen            ◈ SDL_WINDOW_FULLSCREEN,
-    grab_input            ◈ SDL_WINDOW_INPUT_GRABBED,
     maximized             ◈ SDL_WINDOW_MAXIMIZED,
     no_window_decorations ◈ SDL_WINDOW_BORDERLESS,
     opengl                ◈ SDL_WINDOW_OPENGL,
@@ -65,84 +98,129 @@ fun sdl_window_flags():
 // -----------------------------------------------
 
 
-expr.rule '(when $cond: $then ...):
-  '(if $cond | $then ...
-             | base.void())
+expr.rule '(when $cond ... : $then ...; ...):
+  '(if $cond ... | $then ...; ...
+                 | base.void())
 
 
+// It seems hard to write a macro to generate these in Rhombus . . .
 fun sdl_error_if(cond):
   when cond:
-    base.error("SDL Error: " & SDL_GetError())
+    die("SDL2 error: " & sdl.GetError())
+fun img_error_if(cond):
+  when cond:
+    die("SDL2_image error: " & img.GetError())
+fun ttf_error_if(cond):
+  when cond:
+    die("SDL2_ttf error: " & ttf.GetError())
 
 
 expr.rule '(sdl_check: $body ...):
   '(sdl_error_if($body ...))
+expr.rule '(img_check: $body ...):
+  '(img_error_if($body ...))
+expr.rule '(ttf_check: $body ...):
+  '(ttf_error_if($body ...))
 
 
-fun | sdl_bool(#false) : SDL_FALSE
-    | sdl_bool(_)      : SDL_TRUE
+fun | sdl_bool(#false) : sdl.FALSE
+    | sdl_bool(_)      : sdl.TRUE
 
 
 // -----------------------------------------------
 
 
+fun set_gl_attributes():
+  fun set(attr, val):
+    sdl_check: sdl.GL_SetAttribute(attr, val) < 0
+
+  set(▷ SDL_GL_ACCELERATED_VISUAL, 1)
+  set(▷ SDL_GL_CONTEXT_MAJOR_VERSION, 3)  // OpenGL 3.3 or higher
+  set(▷ SDL_GL_CONTEXT_MINOR_VERSION, 3)
+  set(▷ SDL_GL_CONTEXT_PROFILE_MASK, 1)   // Core profile
+  set(▷ SDL_GL_DOUBLEBUFFER, 1)
+  set(▷ SDL_GL_DEPTH_SIZE, 24)
+  set(▷ SDL_GL_RED_SIZE, 8)
+  set(▷ SDL_GL_GREEN_SIZE, 8)
+  set(▷ SDL_GL_BLUE_SIZE, 8)
+
 fun init_sdl():
-  SDL_SetMainReady()
-  sdl_check: SDL_Init(sdl_init_flags()) < 0
-  sdl_check: SDL_GL_LoadLibrary(#false) < 0
-  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_ACCELERATED_VISUAL, 1) < 0
-  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_CONTEXT_MAJOR_VERSION, 4) < 0
-  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_CONTEXT_MINOR_VERSION, 6) < 0
-  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DOUBLEBUFFER, 1) < 0
-  sdl_check: SDL_GL_SetAttribute(▷ SDL_GL_DEPTH_SIZE, 24) < 0
+  sdl.SetMainReady()
+
+  val sdl_flags: sdl_init_flags()
+  val img_flags: img_init_flags()
+
+  sdl_check: sdl.Init(sdl_flags) < 0
+  img_check: img.Init(img_flags) ≠ img_flags
+  ttf_check: ttf.Init() < 0
+  sdl_check: sdl.GL_LoadLibrary(#false) < 0
+  set_gl_attributes()
 
 
-fun new_ptr(type):
+// is there some way i can discover _int from _int_ptr (or
+// vice versa) so i don't have to pass both of them in here?
+fun new_ptr(ptr_type, data_type, count = 1):
   ffi.cast(
-    ffi.malloc(▷ atomic, ffi.ctype_sizeof(type)),
+    ffi.malloc(▷ atomic, ffi.ctype_sizeof(data_type) * count),
     ffi._pointer,
-    type)
+    ptr_type)
 
 
 fun get_window_size(window):
-  fun new(): new_ptr(_int_star)
+  fun new(): new_ptr(sdl._int_ptr, ffi._int)
   fun ref(ptr): ffi.ptr_ref(ptr, ffi._int)
 
-  val [width, height] : [new(), new()]
-  SDL_GetWindowSize(window, width, height)
-  [ref(width), ref(height)]
+  val width  : new()
+  val height : new()
+  sdl.GetWindowSize(window, width, height)
+  values(ref(width),
+         ref(height))
+
+
+fun get_surface_size(surface):
+  values(sdl.Surface_w(surface),
+         sdl.Surface_h(surface))
 
 
 fun init_opengl(window):
-  val context: SDL_GL_CreateContext(window)
+  val context: sdl.GL_CreateContext(window)
   sdl_check: !context
-  val [width, height]: get_window_size(window)
+
+  val (width, height): get_window_size(window)
   glViewport(0, 0, width, height)
-  glClearColor(1.0, 0.5, 0.8, 1.0)
+
   glDisable(GL_DEPTH_TEST)
   glDisable(GL_CULL_FACE)
 
 
 fun init_vsync():
   val vsync    : #true
-  val adaptive : #true
-  sdl_check: 
-    SDL_GL_SetSwapInterval(cond | adaptive : -1
+  val adaptive : #false
+  sdl_check:
+    sdl.GL_SetSwapInterval(cond | adaptive : -1
                                 | vsync    :  1
                                 | ~else    :  0) < 0
 
 
 fun get_window():
-  val window_title: "Hello, world!"
-  val x_pos: SDL_WINDOWPOS_UNDEFINED
-  val y_pos: SDL_WINDOWPOS_UNDEFINED
-  val x_res: 640
-  val y_res: 480
+  val window_title : "Hello, world!"
+  val x            : sdl.WINDOWPOS_UNDEFINED
+  val y            : sdl.WINDOWPOS_UNDEFINED
+  val width        : 640
+  val height       : 480
 
   val window:
-    SDL_CreateWindow(
-      window_title, x_pos, y_pos, x_res, y_res, sdl_window_flags())
+    sdl.CreateWindow(
+      window_title,
+      x,
+      y,
+      width,
+      height,
+      sdl_window_flags())
   sdl_check: !window
+
+  sdl.RaiseWindow(window)
+
   init_opengl(window)
   init_vsync()
   window
@@ -151,42 +229,242 @@ fun get_window():
 fun sysinfo():
   fun | fmt_bool(1): "Yes"
       | fmt_bool(_): "No"
-  say("Platform:         " & SDL_GetPlatform())
-  say("CPU count:        " & SDL_GetCPUCount())
-  say("System RAM:       " & SDL_GetSystemRAM() & " MiB")
-  say("Has SSE:          " & SDL_HasSSE()   |> fmt_bool)
-  say("Has SSE2:         " & SDL_HasSSE2()  |> fmt_bool)
-  say("Has SSE3:         " & SDL_HasSSE3()  |> fmt_bool)
-  say("Has SSE4.1:       " & SDL_HasSSE41() |> fmt_bool)
-  say("Has SSE4.2:       " & SDL_HasSSE42() |> fmt_bool)
+  say("Platform:         " & sdl.GetPlatform())
+  say("CPU count:        " & sdl.GetCPUCount())
+  say("System RAM:       " & sdl.GetSystemRAM() & " MiB")
+  say("Has SSE:          " & sdl.HasSSE()   |> fmt_bool)
+  say("Has SSE2:         " & sdl.HasSSE2()  |> fmt_bool)
+  say("Has SSE3:         " & sdl.HasSSE3()  |> fmt_bool)
+  say("Has SSE4.1:       " & sdl.HasSSE41() |> fmt_bool)
+  say("Has SSE4.2:       " & sdl.HasSSE42() |> fmt_bool)
   say("OpenGL vendor:    " & glGetString(GL_VENDOR))
   say("OpenGL renderer:  " & glGetString(GL_RENDERER))
   say("OpenGL version:   " & glGetString(GL_VERSION))
   say("OpenGLSL version: " & glGetString(GL_SHADING_LANGUAGE_VERSION))
 
 
+fun gen_gl_id(gen_func):
+  val id_array: gen_func(1)
+  ffi.u32vector_ref(id_array, 0)
+
+
+fun gen_gl_buffer():
+  gen_gl_id(glGenBuffers)
+
+
+fun gen_gl_texture():
+  gen_gl_id(glGenTextures)
+
+
+fun sizeof_f32vector(fvec):
+  4 * ffi.f32vector_length(fvec)
+
+
+fun sizeof_u32vector(fvec):
+  4 * ffi.u32vector_length(fvec)
+
+
+fun gl_error_die(log_function, id):
+  val (len, log_bytes): log_function(id, 1024)
+  val error_msg:
+    base.subbytes(log_bytes, 0, len)
+      |> base.bytes_to_string(_)
+  sdl.Quit()
+  die(error_msg)
+
+
+val gl_shader_error_die:
+  gl_error_die(glGetShaderInfoLog, _)
+
+
+val gl_program_error_die:
+  gl_error_die(glGetProgramInfoLog, _)
+
+
+fun compile_shader(filename, type):
+  val shader: glCreateShader(type)
+  val source: file.file_to_string(filename)
+  val length: base.string_length(source)
+
+  say("compiling shader #" & shader & ": " & filename)
+  glShaderSource(shader, 1, base.vector(source), ffi.s32vector(length))
+  glCompileShader(shader)
+  when glGetShaderiv(shader, GL_COMPILE_STATUS) == 0:
+    gl_shader_error_die(shader)
+
+  shader
+
+
+fun create_shader_program(vs_filename, fs_filename):
+  val vertex_shader   : compile_shader(vs_filename, GL_VERTEX_SHADER)
+  val fragment_shader : compile_shader(fs_filename, GL_FRAGMENT_SHADER)
+
+  val shader_program: glCreateProgram()
+  glAttachShader(shader_program, vertex_shader)
+  glAttachShader(shader_program, fragment_shader)
+
+  say("linking shader program #" & shader_program
+        & " (" & vs_filename & " + " & fs_filename & ")")
+  glLinkProgram(shader_program)
+  when glGetProgramiv(shader_program, GL_LINK_STATUS) == 0:
+    gl_program_error_die(shader_program)
+
+  glDeleteShader(vertex_shader)
+  glDeleteShader(fragment_shader)
+
+  shader_program
+
+
+fun make_vao():
+  val vao_array: glGenVertexArrays(1)
+  ffi.u32vector_ref(vao_array, 0)
+
+fun draw_sprite(window):
+  val vertices:
+    ffi.f32vector(
+      // pos.x,y,z          col.r,g,b          tex.s,t
+      -0.5, -0.5, +0.0,     1.0, 0.0, 0.0,     0.0, 0.0,
+      -0.5, +0.5, +0.0,     0.0, 1.0, 0.0,     0.0, 1.0,
+      +0.5, -0.5, +0.0,     0.0, 0.0, 1.0,     1.0, 0.0,
+      +0.5, +0.5, +0.0,     1.0, 1.0, 0.0,     1.0, 1.0,
+    )
+
+  val indices:
+    ffi.u32vector(
+      0, 1, 2,
+      2, 1, 3
+    )
+
+  val vao: make_vao()
+  glBindVertexArray(vao)
+
+  val vbo: gen_gl_buffer()
+  glBindBuffer(GL_ARRAY_BUFFER, vbo)
+  glBufferData(GL_ARRAY_BUFFER,
+               sizeof_f32vector(vertices),
+               ffi.f32vector_to_cpointer(vertices),
+               GL_STATIC_DRAW)
+
+  val ebo: gen_gl_buffer()
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+               sizeof_u32vector(indices),
+               ffi.u32vector_to_cpointer(indices),
+               GL_STATIC_DRAW)
+
+  val float_size: 4
+
+  glVertexAttribPointer(0, 3, GL_FLOAT, #false, 8 * float_size, 0)
+  glEnableVertexAttribArray(0)
+
+  glVertexAttribPointer(1, 3, GL_FLOAT, #false, 8 * float_size, 3 * float_size)
+  glEnableVertexAttribArray(1)
+
+  glVertexAttribPointer(2, 2, GL_FLOAT, #false, 8 * float_size, 6 * float_size)
+  glEnableVertexAttribArray(2)
+
+  val shader_program: create_shader_program("test.vert", "test.frag")
+  glUseProgram(shader_program)
+
+  val texture: load_texture()
+  glUniform1i(glGetUniformLocation(shader_program, "ourTexture"), 0) // texture unit 0
+
+  glUseProgram(shader_program)
+  glBindVertexArray(vao)
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0)
+
+
+fun draw(window):
+  draw_sprite(window)
+
+
+fun surface_to_bytes_per_pixel(surface):
+  sdl.Surface_format(surface)
+    |> sdl.PixelFormat_BytesPerPixel(_)
+
+
+fun flip_surface(src):
+  val (width, height):
+    get_surface_size(src)
+
+  val dest:
+    sdl.CreateRGBSurfaceWithFormat(0, width, height, 32, sdl.PIXELFORMAT_RGBA32)
+  sdl_check: !dest
+
+  val src_rect  : sdl.make_SDL_Rect(0, 0, width, 1)
+  val dest_rect : sdl.make_SDL_Rect(0, 0, width, 1)
+
+  fun flip_row(y0):
+    val y1: height - y0 - 1
+
+    // mutating here is 80% faster than generating new SDL_Rects
+    sdl.set_SDL_Rect_y(src_rect, y0)
+    sdl.set_SDL_Rect_y(dest_rect, y1)
+
+    sdl_check:
+      sdl.BlitSurface(src, src_rect, dest, dest_rect) < 0
+
+  base.for_each(flip_row, list.range(height))
+  dest
+
+
+fun load_texture():
+  val src: img.Load("test.png")
+  img_check: !src
+
+  val flipped: flip_surface(src)
+  val pixels: sdl.Surface_pixels(flipped)
+  sdl_check: !pixels
+
+  val id: gen_gl_texture()
+  glActiveTexture(GL_TEXTURE0)
+  glBindTexture(GL_TEXTURE_2D, id)
+
+  val (width, height) : get_surface_size(flipped)
+  glTexImage2D(GL_TEXTURE_2D,
+               0, // no mipmaps
+               GL_RGBA,
+               width,
+               height,
+               0, // unused
+               GL_RGBA,
+               GL_UNSIGNED_BYTE,
+               pixels)
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+  sdl.FreeSurface(src)
+  sdl.FreeSurface(flipped)
+  id
+
+
 fun update(window):
-  val surface: SDL_GetWindowSurface(window)
+  val surface: sdl.GetWindowSurface(window)
   sdl_check: !surface
-  sdl_check: SDL_UpdateWindowSurface(window) < 0
+
+  glClearColor(1.0, 0.5, 0.8, 1.0)
   glClear(GL_COLOR_BUFFER_BIT ∨ GL_DEPTH_BUFFER_BIT)
-  SDL_GL_SwapWindow(window)
-  base.sleep(1)
+  glEnable(GL_BLEND)
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+  draw(window)
+  sdl.GL_SwapWindow(window)
+  base.sleep(1.5)
 
 
 fun cleanup(window):
-  SDL_DestroyWindow(window)
-  SDL_Quit()
-  say("Bye, bye!")
+  sdl.DestroyWindow(window)
+  sdl.Quit()
 
 
 // -----------------------------------------------
 
 
 fun main():
+  init_sdl()
   val window: get_window()
-  sysinfo()
   update(window)
   cleanup(window)
 
 main()
+
+

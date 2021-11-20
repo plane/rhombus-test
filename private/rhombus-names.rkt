@@ -3,6 +3,7 @@
 ;; https://github.com/samdphillips/rhombus-examples/blob/main/rhombus-examples-web/web/private/rhombus-names.rkt
 ;;
 ;; SamPh's completely unofficial rules for renaming Racket names to Rhombus
+;; (modified, needs cleanup)
 
 (provide rhombus-rename)
 
@@ -23,8 +24,8 @@
        (rename (regexp-replace* #px":" name "_"))]
       [(regexp-match #px"-" name)
        (rename (regexp-replace* #px"-" name "_"))]
-      [(regexp-match #px"\\*" name)
-       (rename (regexp-replace* #px"\\*" name "_star"))]
+      [(regexp-match #px"\\*$" name)
+       (rename (regexp-replace* #px"\\*$" name "_star"))]
       [else name]))
   (rename name))
 

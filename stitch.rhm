@@ -1,0 +1,328 @@
+#lang rhombus
+
+import:
+  racket/base:
+    rename:
+      error ~to die
+      #{make-vector} ~to make_vector
+      #{for-each} ~to for_each
+      #{string->path} ~to string_to_path
+      #{path->string} ~to path_to_string
+      #{string-downcase} ~to string_downcase
+      #{inexact->exact} ~to inexact_to_exact
+      #{exact->inexact} ~to exact_to_inexact
+    expose:
+      die
+  racket/control
+  racket/file:
+    rename:
+      #{find-files} ~to find_files
+  racket/list
+  racket/string:
+    rename:
+      #{string-suffix?} ~to check_suffix
+
+
+import:
+  rhombus/macro: no_prefix
+
+
+import:
+  "private/sdl/sdl.rkt"
+  "private/sdl/img.rkt"
+  "private/threading.rhm": no_prefix
+
+
+// -----------------------------------------------
+
+
+operator (lhs ≠ rhs):
+  ! (lhs === rhs)
+
+
+operator (lhs % rhs):
+  base.remainder(lhs, rhs)
+
+
+operator (lhs ÷ rhs):
+  base.quotient(lhs, rhs)
+
+
+expr.rule '($cond ◈ $name):
+  '(if $cond | [symbol($name)]
+             | [])
+
+
+// -----------------------------------------------
+
+
+fun img_init_flags():
+  val jpg        : #false
+  val png        : #true
+  val tif        : #false
+  val webp       : #false
+
+  base.append(
+    jpg  ◈ IMG_INIT_JPG,
+    png  ◈ IMG_INIT_PNG,
+    tif  ◈ IMG_INIT_TIF,
+    webp ◈ IMG_INIT_WEBP,
+  )
+
+
+// -----------------------------------------------
+
+
+expr.rule '(when $cond ... : $then ...; ...):
+  '(if $cond ... | $then ...; ...
+                 | base.void())
+
+
+fun sdl_error_if(cond):
+  when cond:
+    die("SDL2 error: " & sdl.GetError())
+fun img_error_if(cond):
+  when cond:
+    die("SDL2_image error: " & img.GetError())
+
+
+expr.rule '(sdl_check: $body ...):
+  '(sdl_error_if($body ...))
+expr.rule '(img_check: $body ...):
+  '(img_error_if($body ...))
+
+
+// -----------------------------------------------
+
+
+fun init_sdl():
+  val img_flags: img_init_flags()
+
+  sdl.SetMainReady()
+  sdl_check: sdl.Init([]) < 0
+  img_check: img.Init(img_flags) ≠ img_flags
+
+
+fun get_surface_size(surface):
+  values(sdl.Surface_w(surface),
+         sdl.Surface_h(surface))
+
+
+fun make_surface(width, height):
+  val surface:
+    sdl.CreateRGBSurfaceWithFormat(0, width, height, 32, sdl.PIXELFORMAT_RGBA32)
+  sdl_check: !surface
+  surface
+
+
+fun copy_surface(src, dest, x, y):
+  val (width, height):
+    get_surface_size(src)
+
+  val dest_rect:
+    sdl.make_SDL_Rect(x, y, width, height)
+
+  sdl_check:
+    sdl.BlitSurface(src, #false, dest, dest_rect) < 0
+
+  
+// -----------------------------------------------
+
+
+fun sum(xs):
+  fun add(lhs, rhs):
+    lhs + rhs
+  base.foldl(add, 0, xs)
+
+
+fun log2(x):
+  base.log(x) / base.log(2)
+
+
+fun round_up_to_nearest_pow2(x):
+  log2(x)    
+    |> base.ceiling
+    |> base.expt(2, _)
+
+
+fun round_up_to_nearest(x, step):
+  val stepf:
+    base.exact_to_inexact(step)
+  base.ceiling(x / step)
+    |> base.inexact_to_exact
+
+
+// -----------------------------------------------
+
+
+class Image(surface, filename, w, h, gridw, gridh)
+
+
+fun make_Image(filename, granularity):
+  val src: img.Load(filename)
+  img_check: !src
+
+  val pixels: sdl.Surface_pixels(src)
+  sdl_check: !pixels
+
+  val (width, height) : get_surface_size(src)
+  val gridw           : round_up_to_nearest(width, granularity)
+  val gridh           : round_up_to_nearest(height, granularity)
+
+  Image(src, filename, width, height, gridw, gridh)
+
+
+fun find_png_files(pathname):
+  fun is_png(path):
+    base.path_to_string(path)
+      |> base.string_downcase(_)
+      |> string.check_suffix(_, ".png")
+
+  val path: base.string_to_path(pathname)
+  val files: file.find_files(is_png, path)
+  base.map(base.path_to_string, files)
+
+
+fun cleanup(window):
+  sdl.Quit()
+
+
+// -----------------------------------------------
+
+
+fun max_side(img):
+  base.max(img.w, img.h)
+
+
+fun load_sorted_imgs(pathname, granularity):
+  fun compare_size(lhs, rhs):
+    max_side(lhs) > max_side(rhs)
+
+  fun load(path):
+    make_Image(path, granularity)
+    
+  find_png_files(pathname)
+    |> base.map(load, _)
+    |> base.sort(_, compare_size)
+
+
+fun get_atlas_size(imgs):
+  fun size(img):
+    img.w * img.h
+
+  val img_maxdim:
+    base.apply(
+      base.max,
+      base.map(max_side, imgs))
+
+  base.map(size, imgs)
+    |> sum
+    |> base.sqrt
+    |> base.max(_, img_maxdim)
+    |> round_up_to_nearest_pow2
+    |> base.inexact_to_exact
+
+
+fun make_grid(width -: Integer,
+              height -: Integer):
+  val max_index : width * height
+  val data      : base.make_vector(max_index, #false)
+
+  fun check_range(x, y):
+    when base.or(x < 0,
+                 x >= width,
+                 y < 0,
+                 y >= height):
+      die("index out of range: x=" & x & ", y=" & y)
+
+  fun _get(x -: Integer,
+           y -: Integer):
+    check_range(x, y)
+    data[y * width + x]
+    
+  fun _set(x -: Integer,
+           y -: Integer):
+    check_range(x, y)
+    data[y * width + x] = #true
+
+  fun _xy(index -: Integer):
+    val [x, y]: [index % width,
+                 index ÷ width]
+    check_range(x, y)
+    values(x, y)
+    
+  class Grid(get, set, xy, width, height)
+  Grid(_get, _set, _xy, width, height)
+
+
+fun make_atlas_grid(atlas_width -: Integer,
+                    granularity -: Integer):
+  val row_squares : atlas_width / granularity
+  val col_squares : row_squares
+                  
+  make_grid(row_squares, col_squares)
+
+
+fun check_filled(grid, x0, y0, x1, y1):
+  fun check_row(y):
+    fun check(x):
+      grid.get(x, y)
+    base.ormap(check, list.range(x0, x1))
+  base.ormap(check_row, list.range(y0, y1))
+
+
+fun check_empty(grid, x0, y0, x1, y1):
+  !check_filled(grid, x0, y0, x1, y1)
+
+
+fun set_filled(grid, x0, y0, x1, y1):
+  fun set_row(y):
+    fun set(x):
+      grid.set(x, y)
+    base.for_each(set, list.range(x0, x1))
+  base.for_each(set_row, list.range(y0, y1))
+
+
+fun make_atlas(imgs, granularity, size_mult = 1):
+  val atlas_size   : get_atlas_size(imgs) * size_mult
+  val grid         : make_atlas_grid(atlas_size, granularity)
+  val atlas        : make_surface(atlas_size, atlas_size)
+                                                           
+  fun insert_img(img):
+    val max_gridx : grid.width  - img.gridw
+    val max_gridy : grid.height - img.gridh                    
+    fun loop(x = 0, y = 0):
+      cond
+        | y == max_gridy:
+            control.abort(
+              make_atlas(imgs, granularity, size_mult * 2))
+        | x == max_gridx:
+            loop(0, y + 1)
+        | ~else:
+            val x1: x + img.gridw
+            val y1: y + img.gridh
+            val px: x * granularity
+            val py: y * granularity
+            if check_empty(grid, x, y, x1, y1)
+              | copy_surface(img.surface, atlas, px, py)
+                set_filled(grid, x, y, x1, y1)
+              | loop(x + 1, y)
+    loop()
+  base.map(insert_img, imgs)
+  atlas
+    
+
+fun main():
+  val granularity  : 16
+  val img_pathname : "in"
+
+  init_sdl()
+  val imgs: load_sorted_imgs(img_pathname, granularity)
+  val atlas:
+    control.prompt(
+      make_atlas(imgs, granularity))
+  img.SavePNG(atlas, "output.png")
+  sdl.Quit()
+
+
+main()
