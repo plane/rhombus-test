@@ -283,7 +283,7 @@ fun set_filled(grid, x0, y0, x1, y1):
 // -----------------------------------------------
 
 
-class ImagePos(filename, x, y)
+class ImageInfo(filename, x, y, w, h)
 
 
 fun make_atlas(imgs, granularity, size_mult = 1):
@@ -309,7 +309,7 @@ fun make_atlas(imgs, granularity, size_mult = 1):
             if check_empty(grid, x, y, x1, y1)
               | copy_surface(img.surface, atlas_image, px, py)  // copy the image to our atlas
                 set_filled(grid, x, y, x1, y1)                  // keep track of it in our grid
-                ImagePos(img.filename, px, py)                  // and return its pixel location
+                ImageInfo(img.filename, px, py, img.w, img.h)   // and return its pixel location
               | loop(x + 1, y)
     loop()
 
@@ -326,6 +326,8 @@ fun write_atlas_index(atlas_index -: Array,
     base.for_each(
       base.displayln, [entry.x,
                        entry.y,
+                       entry.w,
+                       entry.h,
                        entry.filename,
                        ""])
 
