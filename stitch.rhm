@@ -40,14 +40,6 @@ operator (lhs ≠ rhs):
   ! (lhs === rhs)
 
 
-operator (lhs % rhs):
-  base.remainder(lhs, rhs)
-
-
-operator (lhs ÷ rhs):
-  base.quotient(lhs, rhs)
-
-
 expr.rule '($cond ◈ $name):
   '(if $cond | [symbol($name)]
              | [])
@@ -245,14 +237,8 @@ fun make_grid(width -: Integer,
     check_range(x, y)
     data[y * width + x] = #true
 
-  fun _xy(index -: Integer):
-    val [x, y]: [index % width,
-                 index ÷ width]
-    check_range(x, y)
-    values(x, y)
-    
-  class Grid(get, set, xy, width, height)
-  Grid(_get, _set, _xy, width, height)
+  class Grid(get, set, width, height)
+  Grid(_get, _set, width, height)
 
 
 fun make_atlas_grid(atlas_width -: Integer,
