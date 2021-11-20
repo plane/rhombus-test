@@ -50,7 +50,7 @@ expr.rule '($cond ◈ $name):
 
 fun img_init_flags():
   val jpg        : #false
-  val png        : #true
+  val png        : #true    // only support PNG for now
   val tif        : #false
   val webp       : #false
 
@@ -117,7 +117,7 @@ fun copy_surface(src, dest, x, y):
   sdl_check:
     sdl.BlitSurface(src, #false, dest, dest_rect) < 0
 
-  
+
 // -----------------------------------------------
 
 
@@ -132,13 +132,13 @@ fun log2(x):
 
 
 fun round_up_to_nearest_pow2(x):
-  log2(x)    
+  log2(x)
     |> base.ceiling
     |> base.expt(2, _)
 
 
-fun round_up_to_nearest(x, step):
-  base.ceiling(x / step)
+fun pixel_size_to_grid_size(x, granularity):
+  base.ceiling(x / granularity)
     |> base.inexact_to_exact
 
 
@@ -155,26 +155,29 @@ fun make_Image(filename, granularity):
   val pixels: sdl.Surface_pixels(src)
   sdl_check: !pixels
 
-  val (width, height) : get_surface_size(src)
-  val gridw           : round_up_to_nearest(width, granularity)
-  val gridh           : round_up_to_nearest(height, granularity)
+  val (width, height): get_surface_size(src)
+  val gridw: pixel_size_to_grid_size(width, granularity)
+  val gridh: pixel_size_to_grid_size(height, granularity)
 
   Image(src, filename, width, height, gridw, gridh)
 
 
-fun find_png_files(pathname):
-  fun is_png(path):
+fun find_image_files(pathname):
+  fun has_suffix(path,  suffix):
     base.path_to_string(path)
       |> base.string_downcase(_)
-      |> string.check_suffix(_, ".png")
+      |> string.check_suffix(_, suffix)
+
+  fun is_image(path):
+    base.or(
+      has_suffix(path, ".png"),
+   // has_suffix(path, ".tif"),
+   // has_suffix(path, ".webp"),
+    )
 
   val path: base.string_to_path(pathname)
-  val files: file.find_files(is_png, path)
+  val files: file.find_files(is_image, path)
   base.map(base.path_to_string, files)
-
-
-fun cleanup(window):
-  sdl.Quit()
 
 
 // -----------------------------------------------
@@ -190,10 +193,10 @@ fun load_sorted_imgs(pathname, granularity):
 
   fun load(path):
     make_Image(path, granularity)
-    
-  find_png_files(pathname)
+
+  find_image_files(pathname)
     |> base.map(load, _)
-    |> base.sort(_, compare_size)
+    |> base.sort(_, compare_size)  // Sort from big to small
 
 
 fun get_atlas_size(imgs):
@@ -205,15 +208,17 @@ fun get_atlas_size(imgs):
       base.max,
       base.map(max_side, imgs))
 
-  base.map(size, imgs)
-    |> sum
-    |> base.sqrt
-    |> base.max(_, img_maxdim)
+  val average_size:
+    base.map(size, imgs)
+      |> sum
+      |> base.sqrt
+
+  base.max(average_size, img_maxdim)
     |> round_up_to_nearest_pow2
     |> base.inexact_to_exact
 
 
-fun make_grid(width -: Integer,
+fun make_grid(width  -: Integer,
               height -: Integer):
   val max_index : width * height
   val data      : base.make_vector(max_index, #false)
@@ -229,7 +234,7 @@ fun make_grid(width -: Integer,
            y -: Integer):
     check_range(x, y)
     data[y * width + x]
-    
+
   fun _set(x -: Integer,
            y -: Integer):
     check_range(x, y)
@@ -243,7 +248,7 @@ fun make_atlas_grid(atlas_width -: Integer,
                     granularity -: Integer):
   val row_squares : atlas_width / granularity
   val col_squares : row_squares
-                  
+
   make_grid(row_squares, col_squares)
 
 
@@ -271,15 +276,15 @@ fun make_atlas(imgs, granularity, size_mult = 1):
   val atlas_size   : get_atlas_size(imgs) * size_mult
   val grid         : make_atlas_grid(atlas_size, granularity)
   val atlas        : make_surface(atlas_size, atlas_size)
-                                                           
+
   fun insert_img(img):
-    val max_gridx : grid.width  - img.gridw
-    val max_gridy : grid.height - img.gridh                    
+    val max_gridx : grid.width  - img.gridw + 1
+    val max_gridy : grid.height - img.gridh + 1
     fun loop(x = 0, y = 0):
       cond
         | y == max_gridy:
-            control.abort(
-              make_atlas(imgs, granularity, size_mult * 2))
+            control.abort(                                    // we ran out of space, so let's try again
+              make_atlas(imgs, granularity, size_mult * 2))   // with twice as much space
         | x == max_gridx:
             loop(0, y + 1)
         | ~else:
@@ -294,18 +299,22 @@ fun make_atlas(imgs, granularity, size_mult = 1):
     loop()
   base.map(insert_img, imgs)
   atlas
-    
 
-fun main():
-  val granularity  : 16
-  val img_pathname : "in"
 
-  init_sdl()
-  val imgs: load_sorted_imgs(img_pathname, granularity)
+fun stitch_images(src_pathname  = "in",
+                  dest_filename = "output.png",
+                  granularity   = 16):
+  val imgs: 
+    load_sorted_imgs(src_pathname, granularity)
   val atlas:
     control.prompt(
       make_atlas(imgs, granularity))
-  img.SavePNG(atlas, "output.png")
+  img.SavePNG(atlas, dest_filename)
+
+
+fun main():
+  init_sdl()
+  stitch_images()
   sdl.Quit()
 
 
