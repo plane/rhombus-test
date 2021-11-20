@@ -170,7 +170,7 @@ fun find_image_files(pathname):
 
   fun is_image(path):
     base.or(
-      has_suffix(path, ".png"),
+      has_suffix(path, ".png"),   // only use PNG for now
    // has_suffix(path, ".tif"),
    // has_suffix(path, ".webp"),
     )
