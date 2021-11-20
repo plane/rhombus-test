@@ -332,7 +332,7 @@ fun write_atlas_index(atlas_index -: Array,
   base.with_output_to_file(
     filename,
     fun():
-      base.map(fmt_entry, atlas_index),
+      base.for_each(fmt_entry, atlas_index),
     ~exists: ▷ replace)
 
 
