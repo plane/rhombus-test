@@ -62,21 +62,21 @@ import:
   racket/base:
     rename:
       #{bytes->string/utf-8} ~to bytes_to_string
-      #{for-each} ~to for_each
-      #{inexact->exact} ~to inexact_to_exact
-      #{make-vector} ~to make_vector
-      #{path->string} ~to path_to_string
-      #{string-downcase} ~to string_downcase
+      #{for-each}            ~to for_each
+      #{inexact->exact}      ~to inexact_to_exact
+      #{make-vector}         ~to make_vector
+      #{path->string}        ~to path_to_string
+      #{string-downcase}     ~to string_downcase
       #{with-output-to-file} ~to with_output_to_file
   racket/control
   racket/file:
     rename:
-      #{find-files} ~to find_files
+      #{find-files}          ~to find_files
   racket/list
   racket/path:
     rename:
       #{file-name-from-path} ~to to_filename
-      #{path-get-extension} ~to get_extension
+      #{path-get-extension}  ~to get_extension
 
 
 import:
