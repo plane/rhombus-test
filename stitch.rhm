@@ -1,5 +1,57 @@
 #lang rhombus
 
+/**
+ **  stitch.rhm
+ **
+ **    Stitches together an image atlas from individual images.
+ **    Will attempt to find the smallest power-of-two texture
+ **    size that fits all of the source images.
+ **
+ **    Bin packing is NP hard and the algorithm here is very
+ **    simple, so it won't be perfect, but it seems to work
+ **    fairly well anyway.
+ **
+ **  Input:
+ **
+ **    One or more images in the `in/` directory:
+ **      - Must be PNG, any format libpng can read.  You can
+ **        add additional formats below.
+ **
+ **  Output:
+ **
+ **    `atlas.png` in the current directory:
+ **       - 32-bit RGBA POT texture.
+ **
+ **    `atlas.txt` in the current directory:
+ **       - Keeps track of where each source image ended up
+ **         in the texture atlas.
+ **       - Each entry has the following format:
+ **            x
+ **            y
+ **            width
+ **            height
+ **            filename
+ **       - x, y, width, and height are numeric values.
+ **       - filename is an arbitrary string.
+ **       - There is a blank line between entries.
+ **
+ **  Notes:
+ **
+ **    - This program is written using the experimental Rhombus
+ **      language prototype!  See:
+ **
+ **          https://github.com/racket/rhombus-brainstorming
+ **
+ **      Building this program requires samth's fancy-app prototype:
+ **
+ **          https://github.com/mflatt/shrubbery-rhombus-0/pull/4
+ **
+ **      These things are in-progress and this program may break!
+ **
+ **  -Plane
+ **
+ **/
+
 import:
   racket/base:
     rename:
@@ -187,7 +239,7 @@ fun find_image_files(pathname):
           | ".png" : #true       // add other filetypes here
           | _      : #false
       | #false
-        
+
   file.find_files(is_image_file, pathname)
 
 
@@ -303,7 +355,7 @@ fun make_atlas(imgs, granularity, size_mult = 1):
             loop(0, y + 1)
         | ~else:
             val x1: x + img.gridw                               // grid coordinates
-            val y1: y + img.gridh 
+            val y1: y + img.gridh
             val px: x * granularity                             // pixel coordinates
             val py: y * granularity
             if check_empty(grid, x, y, x1, y1)
@@ -342,9 +394,9 @@ fun stitch_images(src_image_folder      = "in",
                   output_image_filename = "atlas.png",
                   output_index_filename = "atlas.txt",
                   granularity           = 16):
-  val imgs: 
+  val imgs:
     load_sorted_imgs(src_image_folder, granularity)
-    
+
   val (atlas_index,
        atlas_image):
     control.prompt(
@@ -352,7 +404,7 @@ fun stitch_images(src_image_folder      = "in",
 
   write_atlas_index(atlas_index,
                     output_index_filename)
-  
+
   img_check:
     img.SavePNG(atlas_image,
                 output_image_filename) < 0
