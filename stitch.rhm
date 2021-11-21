@@ -48,6 +48,12 @@
  **
  **      These things are in-progress and this program may break!
  **
+ **    - Stitch places images on a 16x16 grid.  This works fairly 
+ **      well and takes about one second to run with the Snailiad
+ **      art set.  You can save a tiny bit of space by reducing
+ **      it to 8, 4, 2, or 1, but it doesn't save much space and
+ **      it takes considerably longer.
+ **
  **  -Plane
  **
  **/
