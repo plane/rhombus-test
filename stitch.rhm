@@ -26,14 +26,15 @@
  **       - Keeps track of where each source image ended up
  **         in the texture atlas.
  **       - Each entry has the following format:
+ **            filename
  **            x
  **            y
  **            width
  **            height
- **            filename
- **       - x, y, width, and height are numeric values.
  **       - filename is an arbitrary string.
+ **       - x, y, width, and height are numeric values.
  **       - There is a blank line between entries.
+ **       - Entries are sorted alphanumerically by filename.
  **
  **  Notes:
  **
@@ -67,6 +68,7 @@ import:
       #{make-vector}         ~to make_vector
       #{path->string}        ~to path_to_string
       #{string-downcase}     ~to string_downcase
+      #{string<?}            ~to string_less_than
       #{with-output-to-file} ~to with_output_to_file
   racket/control
   racket/file:
@@ -373,6 +375,9 @@ fun make_atlas(imgs, granularity, size_mult = 1):
 
   val atlas_index:
     base.map(insert_img, imgs)
+      |> base.sort(_, fun(lhs, rhs):
+                        base.string_less_than(lhs.filename, 
+                                              rhs.filename))
 
   values(atlas_index,
          atlas_image)
@@ -382,11 +387,11 @@ fun write_atlas_index(atlas_index -: Array,
                       filename -: String):
   fun fmt_entry(entry):
     base.for_each(
-      base.displayln, [entry.x,
+      base.displayln, [entry.filename,
+                       entry.x,
                        entry.y,
                        entry.w,
                        entry.h,
-                       entry.filename,
                        ""])
 
   base.with_output_to_file(
