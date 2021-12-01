@@ -3,21 +3,20 @@
 import:
   racket/base:
     rename:
-      displayln ~to say
-      error ~to die
-      #{make-hash} ~to make_hash
-      #{for-each} ~to for_each
-      #{string-length} ~to string_length
-      #{bytes->string/utf-8} ~to bytes_to_string
+      displayln              as say
+      error                  as die
+      #{make-hash}           as make_hash
+      #{for-each}            as for_each
+      #{string-length}       as string_length
+      #{bytes->string/utf-8} as bytes_to_string
     expose:
       die
       say
-  racket/file:
-    rename:
-      #{file->string} ~to file_to_string
+  racket/file rename:
+    #{file->string}          as file_to_string
   racket/list
-  rhombus/macro: no_prefix
-  opengl: no_prefix
+  rhombus/macro: open
+  opengl: open
 
 
 import:
@@ -26,7 +25,7 @@ import:
   "private/sdl/ttf.rkt"
   "private/bitwise.rkt"
   "private/ffi.rkt"
-  "private/threading.rhm": no_prefix
+  "private/threading.rhm": open
 
 
 // -----------------------------------------------
@@ -37,7 +36,7 @@ operator (lhs ∨ rhs):
 
 
 operator (lhs ≠ rhs):
-  ! (lhs === rhs)
+  ! (lhs == rhs)
 
 
 expr.rule '(▷ $name):
